@@ -223,60 +223,6 @@ createListNftTransaction(marketplaceId: string, nftId: string, price: number): T
 // Create a transaction to buy an NFT
 createBuyNftTransaction(marketplaceId: string, nftId: string, price: number): Transaction
 ```
-
-## Environment Variables
-
-Create a `.env` file in the frontend directory:
-
-```env
-# IOTA Network Configuration
-VITE_IOTA_NETWORK=testnet  # or mainnet
-
-# Contract Addresses (update after deployment)
-VITE_PACKAGE_ID=your-package-id
-VITE_MARKETPLACE_ID=your-marketplace-id
-```
-
-## Contribution Guide
-
-We welcome contributions to the IOTA NFT Marketplace! Here's how you can help:
-
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes and test thoroughly
-4. Commit your changes: `git commit -m 'Add amazing feature'`
-5. Push to the branch: `git push origin feature/amazing-feature`
-6. Open a Pull Request
-
-### Code Style
-
-- Follow TypeScript best practices
-- Use Prettier for code formatting
-- Write meaningful commit messages
-- Add tests for new features
-
-### Testing
-
-- Test smart contracts with the Move test framework
-- Test frontend components with React Testing Library
-- Verify transactions on the IOTA testnet before mainnet deployment
-
-## Support & Contact
-
-- 📧 Email: support@iota-nft-marketplace.com
-- 💬 Discord: [Join our community](https://discord.gg/iota-nft-marketplace)
-- 🐦 Twitter: [@IOTANFTMarket](https://twitter.com/IOTANFTMarket)
-- 📖 Documentation: [docs.iota-nft-marketplace.com](https://docs.iota-nft-marketplace.com)
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- IOTA Foundation for the blockchain infrastructure
-- React team for the frontend framework
-- Radix UI for the beautiful component library
-- The open-source community for inspiration and tools
+## Contract Address
+https://explorer.iota.org/object/0xb98d198d639ad7f0a09f84e7c75d6a60f06d39936c04bdb8d92fd08257fbd5f3?network=testnet
+![contract address](image.png)
