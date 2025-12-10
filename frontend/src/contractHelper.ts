@@ -19,6 +19,9 @@ export function createMintNftTransaction(
 ): Transaction {
   const tx = new Transaction();
   
+  // Set explicit gas budget to prevent "Dry run failed" error
+  tx.setGasBudget(10000000); // 10 MIST should be sufficient for most transactions
+  
   tx.moveCall({
     target: `${PACKAGE_ID}::${NFT_MARKETPLACE_MODULE}::mint_nft`,
     arguments: [
@@ -39,6 +42,9 @@ export function createListNftTransaction(
 ): Transaction {
   const tx = new Transaction();
   
+  // Set explicit gas budget to prevent "Dry run failed" error
+  tx.setGasBudget(10000000); // 10 MIST should be sufficient for most transactions
+  
   tx.moveCall({
     target: `${PACKAGE_ID}::${NFT_MARKETPLACE_MODULE}::list_nft`,
     arguments: [
@@ -58,6 +64,9 @@ export function createBuyNftTransaction(
   price: number
 ): Transaction {
   const tx = new Transaction();
+  
+  // Set explicit gas budget to prevent "Dry run failed" error
+  tx.setGasBudget(10000000); // 10 MIST should be sufficient for most transactions
   
   const coin = tx.splitCoins(tx.gas, [tx.pure.u64(price)]);
   
@@ -80,8 +89,11 @@ export function createCancelListingTransaction(
 ): Transaction {
   const tx = new Transaction();
   
+  // Set explicit gas budget to prevent "Dry run failed" error
+  tx.setGasBudget(10000000); // 10 MIST should be sufficient for most transactions
+  
   tx.moveCall({
-    target: `${PACKAGE_ID}::${NFT_MARKETPLACE_MODULE}::cancel_listing`,
+    target: `${PACKAGE_ID}::${NFT_MARKETPLACE_MODULE}::unlist_nft`, // Fixed function name to match contract
     arguments: [
       tx.object(marketplaceId),
       tx.pure.id(nftId)
@@ -98,6 +110,9 @@ export function createUpdatePriceTransaction(
   newPrice: number
 ): Transaction {
   const tx = new Transaction();
+  
+  // Set explicit gas budget to prevent "Dry run failed" error
+  tx.setGasBudget(10000000); // 10 MIST should be sufficient for most transactions
   
   tx.moveCall({
     target: `${PACKAGE_ID}::${NFT_MARKETPLACE_MODULE}::update_price`,

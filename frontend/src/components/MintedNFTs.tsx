@@ -1,4 +1,4 @@
-import { useCurrentAccount, useIotaClientQuery, useSignAndExecuteTransaction } from "@iota/dapp-kit";
+import { useCurrentAccount, useIotaClientQuery, useSignAndExecuteTransaction, useIotaClient } from "@iota/dapp-kit";
 import { Flex, Heading, Text, Card, Grid, Button, Badge, TextField } from "@radix-ui/themes";
 import { getNFTType, createListNftTransaction } from "../contractHelper";
 import { useState } from "react";
@@ -19,10 +19,11 @@ export function MintedNFTs() {
   const [listingPrices, setListingPrices] = useState<{ [key: string]: string }>({});
   const [isLoading, setIsLoading] = useState<{ [key: string]: boolean }>({});
   const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+  const client = useIotaClient();
   
   const nftType = getNFTType();
   
-  const { data, isPending, error } = useIotaClientQuery(
+  const { data, isPending, error, refetch: refetchNFTs } = useIotaClientQuery(
     "getOwnedObjects",
     {
       owner: account?.address as string,
@@ -38,6 +39,35 @@ export function MintedNFTs() {
     {
       enabled: !!account,
     },
+  );
+  
+  // Get the marketplace object to check listings
+  const { data: marketplaceData } = useIotaClientQuery(
+    "getObject",
+    {
+      id: MARKETPLACE_ID,
+      options: {
+        showContent: true,
+        showType: true,
+      },
+    },
+    {
+      enabled: !!MARKETPLACE_ID,
+    }
+  );
+  
+  // Extract marketplace fields
+  const marketplaceFields = marketplaceData?.data?.content as any;
+  
+  // Get the listings table dynamic fields
+  const { data: listingsData } = useIotaClientQuery(
+    "getDynamicFields",
+    {
+      parentId: marketplaceFields?.fields?.listings?.fields?.id?.id,
+    },
+    {
+      enabled: !!marketplaceFields?.fields?.listings?.fields?.id?.id,
+    }
   );
 
   if (!account) {
@@ -64,14 +94,32 @@ export function MintedNFTs() {
   // Parse NFT data from the response
   const nfts: NFTData[] = data?.data.map((obj) => {
     const content = obj.data?.content as any;
-    console.log("NFT Object Data:", obj);
+    const nftId = obj.data?.objectId || "";
+    
+    // Check if this NFT is listed in the marketplace
+    let isListed = false;
+    let price = undefined;
+    
+    if (listingsData?.data) {
+      const listing = listingsData.data.find((field: any) => {
+        const fieldName = field.name as any;
+        return fieldName?.value === nftId;
+      });
+      
+      if (listing) {
+        isListed = true;
+        // We would need to fetch the listing object to get the price
+        // For now, we'll just mark it as listed
+      }
+    }
+    
     return {
-      objectId: obj.data?.objectId || "",
+      objectId: nftId,
       name: content?.fields?.name || "Unnamed NFT",
       description: content?.fields?.description || "No description",
       imageUrl: content?.fields?.url || "",
-      isListed: false, 
-      price: undefined,
+      isListed,
+      price,
     };
   }) || [];
   return (
@@ -233,7 +281,7 @@ export function MintedNFTs() {
       const tx = createListNftTransaction(
         MARKETPLACE_ID,
         nftId,
-        parseFloat(price) * 1000000 // Convert IOTA to smallest unit (assuming 6 decimals)
+        parseFloat(price) * 1000000 // Convert IOTA to smallest unit (1 IOTA = 1,000,000 MIST)
       );
       
       const result = await signAndExecuteTransaction({
@@ -249,14 +297,25 @@ export function MintedNFTs() {
         console.log("Transaction Result:", result.digest);
         // Clear the price input
         setListingPrices(prev => ({ ...prev, [nftId]: "" }));
-        // Refresh the page to show updated NFT status
-        window.location.reload();
+        
+        // Immediately mark the NFT as listed in the UI
+        // This is a temporary UI update until the data is refreshed
+        // Note: We can't directly update the nfts array here since it's derived from the query result
+        // So we'll rely on the refetch to update the actual data
+        
+        // Wait a moment for the transaction to be processed
+        setTimeout(async () => {
+          // Refresh NFT data to update the UI
+          await refetchNFTs();
+        }, 2000);
       } else {
         alert("Failed to list NFT");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error listing NFT:", error);
-      alert("Error listing NFT");
+      // Provide more detailed error message
+      const errorMessage = error.message || JSON.stringify(error);
+      alert(`Error listing NFT: ${errorMessage}`);
     } finally {
       setIsLoading(prev => ({ ...prev, [nftId]: false }));
     }

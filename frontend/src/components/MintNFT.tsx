@@ -45,9 +45,11 @@ export function MintNFT() {
       } else {
         alert("Failed to mint NFT");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error minting NFT:", error);
-      alert("Error minting NFT");
+      // Provide more detailed error message
+      const errorMessage = error.message || JSON.stringify(error);
+      alert(`Error minting NFT: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }

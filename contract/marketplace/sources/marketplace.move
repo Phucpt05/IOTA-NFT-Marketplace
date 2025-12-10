@@ -7,7 +7,7 @@ module marketplace::marketplace {
     use iota::event;
     use std::string::{Self, String};
     use iota::table::{Self, Table};
-    use iota::transfer::share_object;
+    use iota::dynamic_object_field as dof;
 
     // ============ Structs ============
 
@@ -61,6 +61,20 @@ module marketplace::marketplace {
         seller: address,
     }
 
+    public struct PriceUpdated has copy, drop {
+        nft_id: ID,
+        old_price: u64,
+        new_price: u64,
+    }
+
+    // ============ Error Codes ============
+
+    const E_INVALID_PRICE: u64 = 0;
+    const E_NFT_NOT_LISTED: u64 = 1;
+    const E_INSUFFICIENT_PAYMENT: u64 = 2;
+    const E_CANNOT_BUY_OWN_NFT: u64 = 3;
+    const E_NOT_SELLER: u64 = 4;
+
     // ============ Init Function ============
 
     /// Khởi tạo marketplace khi deploy module
@@ -104,14 +118,14 @@ module marketplace::marketplace {
         transfer::public_transfer(nft, sender);
     }
 
-    /// List NFT lên marketplace
+    /// List NFT lên marketplace - NFT sẽ được lưu trong dynamic object field
     public entry fun list_nft(
         marketplace: &mut Marketplace,
         nft: NFT,
         price: u64,
         ctx: &mut TxContext
     ) {
-        assert!(price > 0, 0); // Price phải > 0
+        assert!(price > 0, E_INVALID_PRICE);
 
         let nft_id = object::id(&nft);
         let seller = tx_context::sender(ctx);
@@ -122,35 +136,50 @@ module marketplace::marketplace {
             seller,
         };
 
+        // Thêm listing vào table
         table::add(&mut marketplace.listings, nft_id, listing);
+
+        // Lưu NFT vào dynamic object field của marketplace
+        dof::add(&mut marketplace.id, nft_id, nft);
 
         event::emit(NFTListed {
             nft_id,
             seller,
             price,
         });
-
-        // Transfer NFT vào marketplace (hold bởi shared object)
-        // transfer::share_object(nft);
     }
 
     /// Mua NFT từ marketplace
     public entry fun buy_nft(
         marketplace: &mut Marketplace,
         nft_id: ID,
-        payment: Coin<IOTA>,
+        mut payment: Coin<IOTA>,
         ctx: &mut TxContext
     ) {
-        assert!(table::contains(&marketplace.listings, nft_id), 1); // NFT phải được list
+        assert!(table::contains(&marketplace.listings, nft_id), E_NFT_NOT_LISTED);
 
         let listing = table::remove(&mut marketplace.listings, nft_id);
         let buyer = tx_context::sender(ctx);
 
-        assert!(coin::value(&payment) >= listing.price, 2); // Payment phải đủ
-        assert!(buyer != listing.seller, 3); // Không thể tự mua NFT của mình
+        assert!(coin::value(&payment) >= listing.price, E_INSUFFICIENT_PAYMENT);
+        assert!(buyer != listing.seller, E_CANNOT_BUY_OWN_NFT);
 
-        // Transfer tiền cho seller
-        transfer::public_transfer(payment, listing.seller);
+        // Lấy NFT từ dynamic object field
+        let nft = dof::remove<ID, NFT>(&mut marketplace.id, nft_id);
+
+        // Tách tiền để trả cho seller
+        let payment_coin = coin::split(&mut payment, listing.price, ctx);
+        transfer::public_transfer(payment_coin, listing.seller);
+
+        // Hoàn lại tiền thừa cho buyer (nếu có)
+        if (coin::value(&payment) > 0) {
+            transfer::public_transfer(payment, buyer);
+        } else {
+            coin::destroy_zero(payment);
+        };
+
+        // Transfer NFT cho buyer
+        transfer::public_transfer(nft, buyer);
 
         event::emit(NFTSold {
             nft_id,
@@ -158,26 +187,29 @@ module marketplace::marketplace {
             buyer,
             price: listing.price,
         });
-
-        // Note: NFT sẽ được transfer thủ công sau khi mua
-        // Vì Move không cho phép lấy object từ module address
-        // Frontend cần gọi transfer_nft_to_buyer sau khi mua
     }
 
-    /// Unlist NFT khỏi marketplace
+    /// Unlist NFT khỏi marketplace và trả lại cho seller
     public entry fun unlist_nft(
         marketplace: &mut Marketplace,
         nft_id: ID,
         ctx: &mut TxContext
     ) {
-        assert!(table::contains(&marketplace.listings, nft_id), 4); // NFT phải được list
+        assert!(table::contains(&marketplace.listings, nft_id), E_NFT_NOT_LISTED);
 
         let listing = table::borrow(&marketplace.listings, nft_id);
         let sender = tx_context::sender(ctx);
 
-        assert!(listing.seller == sender, 5); // Chỉ seller mới unlist được
+        assert!(listing.seller == sender, E_NOT_SELLER);
 
-        table::remove(&mut marketplace.listings, nft_id);
+        // Remove listing
+        let listing = table::remove(&mut marketplace.listings, nft_id);
+
+        // Lấy NFT từ dynamic object field
+        let nft = dof::remove<ID, NFT>(&mut marketplace.id, nft_id);
+
+        // Trả NFT về cho seller
+        transfer::public_transfer(nft, listing.seller);
 
         event::emit(NFTUnlisted {
             nft_id,
@@ -192,22 +224,34 @@ module marketplace::marketplace {
         new_price: u64,
         ctx: &mut TxContext
     ) {
-        assert!(table::contains(&marketplace.listings, nft_id), 4);
-        assert!(new_price > 0, 0);
+        assert!(table::contains(&marketplace.listings, nft_id), E_NFT_NOT_LISTED);
+        assert!(new_price > 0, E_INVALID_PRICE);
 
         let listing = table::borrow_mut(&mut marketplace.listings, nft_id);
         let sender = tx_context::sender(ctx);
 
-        assert!(listing.seller == sender, 5);
+        assert!(listing.seller == sender, E_NOT_SELLER);
 
+        let old_price = listing.price;
         listing.price = new_price;
+
+        event::emit(PriceUpdated {
+            nft_id,
+            old_price,
+            new_price,
+        });
     }
 
     // ============ View Functions ============
 
-    /// Lấy thông tin NFT
-    public fun get_nft_info(nft: &NFT): (String, String, String, address) {
-        (nft.name, nft.description, nft.url, nft.creator)
+    /// Lấy thông tin NFT từ marketplace (nếu đang được list)
+    public fun get_listed_nft_info(marketplace: &Marketplace, nft_id: ID): (String, String, String, address, u64, address) {
+        assert!(table::contains(&marketplace.listings, nft_id), E_NFT_NOT_LISTED);
+        
+        let nft = dof::borrow<ID, NFT>(&marketplace.id, nft_id);
+        let listing = table::borrow(&marketplace.listings, nft_id);
+        
+        (nft.name, nft.description, nft.url, nft.creator, listing.price, listing.seller)
     }
 
     /// Kiểm tra NFT có đang được list không
@@ -225,6 +269,12 @@ module marketplace::marketplace {
     public fun get_seller(marketplace: &Marketplace, nft_id: ID): address {
         let listing = table::borrow(&marketplace.listings, nft_id);
         listing.seller
+    }
+
+    /// Lấy thông tin listing
+    public fun get_listing(marketplace: &Marketplace, nft_id: ID): (u64, address) {
+        let listing = table::borrow(&marketplace.listings, nft_id);
+        (listing.price, listing.seller)
     }
 
     // ============ Test Functions ============

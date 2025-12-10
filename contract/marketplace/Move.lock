@@ -40,3 +40,16 @@ dependencies = [
   { id = "Iota", name = "Iota" },
   { id = "MoveStdlib", name = "MoveStdlib" },
 ]
+
+[move.toolchain-version]
+compiler-version = "1.12.0-beta"
+edition = "2024"
+flavor = "iota"
+
+[env]
+
+[env.testnet]
+chain-id = "2304aa97"
+original-published-id = "0xb98d198d639ad7f0a09f84e7c75d6a60f06d39936c04bdb8d92fd08257fbd5f3"
+latest-published-id = "0xb98d198d639ad7f0a09f84e7c75d6a60f06d39936c04bdb8d92fd08257fbd5f3"
+published-version = "1"
